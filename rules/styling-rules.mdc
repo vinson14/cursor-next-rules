@@ -1,0 +1,16 @@
+---
+description: Use this rule when applying styles to components
+alwaysApply: false
+---
+
+## Styling (Tailwind CSS v4)
+
+-   **Theme Configuration**: Use the CSS-first configuration approach. Define global colors and theme extensions directly in the global CSS file (e.g., `app/globals.css`) using the `@theme` directive.
+-   **Colors**: Define colors as CSS variables within the `@theme` block. This automatically generates Tailwind utilities (e.g., `bg-brand`, `text-brand`).
+    ```css
+    @theme {
+        --color-brand: #3b82f6;
+        --color-accent: #f59e0b;
+    }
+    ```
+-   **Avoid Custom Classes**: Do not create global CSS classes (e.g., `.my-button`) for styling. Instead, use Tailwind utility classes or extend the theme if a value is missing.
