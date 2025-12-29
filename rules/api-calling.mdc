@@ -1,0 +1,150 @@
+---
+description: This rule applies when making API calls to the backend, defining data fetching strategies, handling mutations, or configuring authentication in Next.js 16+.
+alwaysApply: true
+---
+
+# API Calling Guidelines
+
+## 1. Centralized Client (`@lib/apiClient`)
+
+-   Use a lightweight wrapper around the native `fetch` API.
+-   **Validation**: Use **Zod** schemas to parse and validate all API responses. This ensures runtime type safety and catches contract mismatches early.
+-   **Authentication**: The client should handle authentication (e.g., retrieving `accessToken`) internally when running on the server.
+
+    ```typescript
+    // Example implementation usage
+    export async function apiClient<T>(
+        endpoint: string,
+        schema: ZodSchema<T>,
+        {
+            cache = "no-store",
+            revalidateSeconds,
+            ...options
+        }: RequestInit & { revalidateSeconds?: number } = {}
+    ): Promise<T> {
+        // Automatically handle auth on server
+        const { accessToken } = await withAuth({ ensureSignedIn: true });
+
+        const response = await fetch(endpoint, {
+            cache,
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                ...options.headers,
+            },
+            next: revalidateSeconds
+                ? { revalidate: revalidateSeconds }
+                : undefined,
+            ...options,
+        });
+        const data = await response.json();
+
+        // Parse triggers error if data doesn't match schema
+        return schema.parse(data);
+    }
+    ```
+
+## 2. Server Components
+
+-   **Fetching**: Fetch data directly in Server Components using `async/await`.
+-   **Authentication**: Handled automatically by `apiClient`.
+-   **Caching**:
+
+    -   Use `next: { tags: [...] }` in the fetch options for granular invalidation.
+
+    ```typescript
+    async function getProjects() {
+        return apiClient("/projects", ProjectSchema, {
+            next: { tags: ["projects"] },
+        });
+    }
+    ```
+
+## 3. Mutations (Server Actions)
+
+-   **Primary Method**: Perform all mutations (POST/PUT/DELETE) inside **Server Actions**.
+-   **Immediate Updates**: Use `updateTag('tag-name')` immediately after a successful mutation to expire the cache and refresh data within the _same request_ (Read-Your-Own-Writes).
+
+    ```typescript
+    'use server';
+    import { updateTag } from 'next/cache';
+
+    export async function createProject(formData: FormData) {
+      // ... mutation logic ...
+      await apiClient('/projects', ProjectSchema, { method: 'POST', body: ... });
+
+      updateTag('projects');
+    }
+    ```
+
+-   **Note**: Avoid using `revalidateTag` in favor of `updateTag` for immediate consistency.
+
+## 4. Client Components
+
+-   **Fetching**: Use **TanStack Query** (React Query) for client-side data fetching where mutations or real-time updates are expected.
+-   **Hydration Pattern**:
+
+    -   Fetch initial data in a **Server Component**.
+    -   Pass this data to the Client Component as `initialData`.
+    -   Initialize the React Query hook with this `initialData` to avoid a loading state on the client.
+
+    ```typescript
+    // Server Component
+    const initialData = await getProjects();
+    return <ProjectsList initialData={initialData} />;
+
+    // Client Component
+    ("use client");
+    export function ProjectsList({ initialData }: { initialData: Project[] }) {
+        const { data } = useQuery({
+            queryKey: ["projects"],
+            queryFn: fetchProjectsClientSide, // Ensure this uses apiClient
+            initialData,
+        });
+        // ...
+    }
+    ```
+
+-   **Mutations**: Call Server Actions from client event handlers.
+-   **Recommendation**: Wrap Server Actions in `useMutation` to handle loading states (`isPending`), error handling, and side effects (`onSuccess`).
+-   **Cache Synchronization**:
+
+    -   Since Server Actions only clear the server cache (`updateTag`), you **must** also invalidate the React Query cache on the client to refetch the fresh data.
+
+    ```typescript
+    const queryClient = useQueryClient();
+
+    const { mutate, isPending } = useMutation({
+        mutationFn: createProjectAction, // Server Action
+        onMutate: async (newProject) => {
+            // Cancel outgoing refetches
+            await queryClient.cancelQueries({ queryKey: ["projects"] });
+
+            // Snapshot the previous value
+            const previousProjects = queryClient.getQueryData(["projects"]);
+
+            // Optimistically update to the new value
+            queryClient.setQueryData(["projects"], (old: Project[] = []) => [
+                ...old,
+                { ...newProject, id: "temp-id" }, // Optimistic data
+            ]);
+
+            return { previousProjects };
+        },
+        onError: (err, newProject, context) => {
+            // Rollback on error
+            queryClient.setQueryData(["projects"], context?.previousProjects);
+        },
+        onSuccess: async () => {
+            // Await invalidation to ensure data is fresh before 'isPending' becomes false
+            await queryClient.invalidateQueries({ queryKey: ["projects"] });
+        },
+    });
+    ```
+
+## 5. Type Safety
+
+-   **Single Source of Truth**: Define Zod schemas in `@types/*` or colocated with features.
+-   Infer TypeScript types from Zod schemas:
+    ```typescript
+    export type Project = z.infer<typeof ProjectSchema>;
+    ```
