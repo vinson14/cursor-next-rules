@@ -2,3 +2,5 @@
 description: This rule is to be used when deciding how to abide by the conventions of NextJS.
 alwaysApply: false
 ---
+
+This is a testing rule
