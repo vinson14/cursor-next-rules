@@ -1,0 +1,4 @@
+---
+description: This rule is to be used when we are creating file and folders within the repository
+alwaysApply: false
+---
