@@ -5,6 +5,7 @@ alwaysApply: false
 
 ## Styling (Tailwind CSS v4)
 
+-   **Refer to Tailwind Documentation**: Always refer to the Tailwind CSS documentation (@Tailwind docs) when applying styles, selecting utility classes, or configuring theme settings. Use the official Tailwind documentation to ensure correct usage of utilities, understand available options, and follow best practices.
 -   **Theme Configuration**: Use the CSS-first configuration approach. Define global colors and theme extensions directly in the global CSS file (e.g., `app/globals.css`) using the `@theme` directive.
 -   **Colors**: Define colors as CSS variables within the `@theme` block. This automatically generates Tailwind utilities (e.g., `bg-brand`, `text-brand`).
     ```css
