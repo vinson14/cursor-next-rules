@@ -1,0 +1,97 @@
+---
+description: This rule applies when creating forms, handling form validation, managing form state, or integrating forms with server actions in Next.js 16+.
+alwaysApply: true
+---
+
+# Forms Guidelines
+
+## 1. Form Library
+
+-   **Primary Library**: Use **React Hook Form** for form state management.
+-   **Validation**: Use **Zod** schemas with `zodResolver` for validation.
+-   **Type Safety**: Infer form types from Zod schemas.
+
+## 2. Server Actions Integration
+
+-   **Mutations**: Wrap Server Actions in TanStack Query's `useMutation`.
+-   **Error Handling**: Handle errors in `onError` callback.
+-   **Success Handling**: Reset form and show success feedback in `onSuccess`.
+
+```typescript
+"use client";
+
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation } from "@tanstack/react-query";
+import { z } from "zod";
+import { toast } from "sonner"; // Example toast lib
+import { createProjectAction } from "@/app/actions/projects";
+import { ProjectFormSchema, type ProjectFormValues } from "@/types/projects";
+import { ApiError } from "@/lib/apiClient";
+import { DjangoErrorSchema } from "@/types/errors";
+
+export function CreateProjectForm() {
+    const form = useForm<ProjectFormValues>({
+        resolver: zodResolver(ProjectFormSchema),
+    });
+
+    const { mutate, isPending } = useMutation({
+        mutationFn: createProjectAction, // Server Action
+        onSuccess: () => {
+            toast.success("Project created!");
+            form.reset();
+        },
+        onError: (error) => {
+            // Check if it's an ApiError with our specific Django error shape
+            if (error instanceof ApiError) {
+                const djangoError = error.data as z.infer<
+                    typeof DjangoErrorSchema
+                >;
+
+                if (error.status === 400 && djangoError) {
+                    // Map Django field errors to RHF
+                    // Assuming Django returns { fieldName: ["Error message"] }
+                    Object.keys(djangoError).forEach((key) => {
+                        const messages = djangoError[key];
+                        if (Array.isArray(messages)) {
+                            form.setError(key as any, {
+                                type: "server",
+                                message: messages[0],
+                            });
+                        }
+                    });
+                    return;
+                }
+            }
+
+            toast.error(error.message || "Something went wrong");
+        },
+    });
+
+    return (
+        <form onSubmit={form.handleSubmit((data) => mutate(data))}>
+            {/* ... inputs ... */}
+        </form>
+    );
+}
+```
+
+## 3. Error Handling
+
+-   **Field-Level Errors**: Use `form.setError()` to set field-specific errors from server validation.
+-   **Generic Errors**: Show toast notifications for non-field-specific errors.
+-   **Error Types**: Check for `ApiError` instances to handle structured error responses.
+
+## 4. Form State Management
+
+-   **Loading States**: Use `isPending` from `useMutation` to disable form during submission.
+-   **Reset**: Call `form.reset()` after successful submission.
+-   **Validation**: Rely on Zod schema validation through `zodResolver`.
+
+## 5. Type Safety
+
+-   **Form Values**: Define types from Zod schemas:
+    ```typescript
+    export type ProjectFormValues = z.infer<typeof ProjectFormSchema>;
+    ```
+-   **Error Schemas**: Define error response schemas for type-safe error handling.
