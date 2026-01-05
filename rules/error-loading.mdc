@@ -1,6 +1,6 @@
 ---
 description: This rule applies when implementing error handling, loading states, Suspense boundaries, or creating error/loading UI files in Next.js.
-alwaysApply: true
+alwaysApply: false
 ---
 
 # Error Handling & Loading States
@@ -27,11 +27,11 @@ app/
 
 ### Error Boundary Placement Strategy
 
-| Placement              | Use Case                                            |
-| :--------------------- | :-------------------------------------------------- |
-| `app/error.tsx`        | Catch-all for unexpected errors                     |
-| `app/(feature)/error.tsx` | Feature-specific error UI and recovery           |
-| Route group level      | Shared error handling for related routes            |
+| Placement                 | Use Case                                 |
+| :------------------------ | :--------------------------------------- |
+| `app/error.tsx`           | Catch-all for unexpected errors          |
+| `app/(feature)/error.tsx` | Feature-specific error UI and recovery   |
+| Route group level         | Shared error handling for related routes |
 
 ## 2. Error Component Implementation
 
@@ -85,7 +85,11 @@ Use `not-found.tsx` for 404 errors. Trigger with `notFound()` from `next/navigat
 import { notFound } from "next/navigation";
 import { ApiError } from "@/lib/apiClient";
 
-export default async function ProjectPage({ params }: { params: { id: string } }) {
+export default async function ProjectPage({
+    params,
+}: {
+    params: { id: string };
+}) {
     try {
         const project = await getProject(params.id);
         return <ProjectDetails project={project} />;
@@ -105,7 +109,8 @@ export default function NotFound() {
         <div className="flex flex-col items-center justify-center min-h-[400px]">
             <h2 className="text-xl font-semibold">Project Not Found</h2>
             <p className="text-muted-foreground">
-                The project you're looking for doesn't exist or has been deleted.
+                The project you're looking for doesn't exist or has been
+                deleted.
             </p>
         </div>
     );
@@ -206,7 +211,11 @@ Use streaming to progressively render content as data becomes available.
 // app/projects/[id]/page.tsx
 import { Suspense } from "react";
 
-export default async function ProjectPage({ params }: { params: { id: string } }) {
+export default async function ProjectPage({
+    params,
+}: {
+    params: { id: string };
+}) {
     // This data loads first (blocking)
     const project = await getProject(params.id);
 

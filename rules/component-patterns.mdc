@@ -1,6 +1,6 @@
 ---
 description: This rule applies when creating React components, deciding between Server and Client Components, or structuring component hierarchies in Next.js.
-alwaysApply: true
+alwaysApply: false
 ---
 
 # Component Patterns
