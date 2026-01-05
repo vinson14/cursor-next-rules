@@ -1,0 +1,262 @@
+---
+description: This rule applies when creating React components, deciding between Server and Client Components, or structuring component hierarchies in Next.js.
+alwaysApply: true
+---
+
+# Component Patterns
+
+## 1. Server vs Client Component Decision Tree
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                 Does the component...                   │
+└─────────────────────────────────────────────────────────┘
+                           │
+        ┌──────────────────┼──────────────────┐
+        ▼                  ▼                  ▼
+   Use hooks?        Use browser       Need interactivity?
+   (useState,        APIs? (window,    (onClick, onChange,
+   useEffect,        localStorage,     onSubmit, etc.)
+   useContext)       navigator)
+        │                  │                  │
+        ▼                  ▼                  ▼
+   ┌─────────────────────────────────────────────┐
+   │              YES to any?                    │
+   └─────────────────────────────────────────────┘
+              │                    │
+          YES ▼                    ▼ NO
+   ┌─────────────┐      ┌─────────────────────┐
+   │   CLIENT    │      │       SERVER        │
+   │  COMPONENT  │      │     COMPONENT       │
+   │ "use client"│      │     (default)       │
+   └─────────────┘      └─────────────────────┘
+```
+
+## 2. Server Components (Default)
+
+Use Server Components when:
+
+-   **Fetching data**: Direct database or API access
+-   **Accessing backend resources**: File system, internal services
+-   **Keeping secrets server-side**: API keys, tokens, credentials
+-   **Reducing bundle size**: Heavy dependencies stay on server
+-   **SEO-critical content**: Content that must be in initial HTML
+
+```typescript
+// ✅ Server Component (no directive needed)
+import { getProjects } from "@/lib/api";
+
+export async function ProjectList() {
+    const projects = await getProjects(); // Direct async/await
+
+    return (
+        <ul>
+            {projects.map((project) => (
+                <li key={project.id}>{project.name}</li>
+            ))}
+        </ul>
+    );
+}
+```
+
+## 3. Client Components
+
+Use Client Components when:
+
+-   **Using React hooks**: `useState`, `useEffect`, `useReducer`, `useContext`
+-   **Using browser APIs**: `window`, `localStorage`, `navigator`, `IntersectionObserver`
+-   **Adding event listeners**: `onClick`, `onChange`, `onSubmit`, `onKeyDown`
+-   **Using client-only libraries**: Animation libraries, charts, rich text editors
+
+```typescript
+"use client";
+
+import { useState } from "react";
+
+export function Counter() {
+    const [count, setCount] = useState(0);
+
+    return <button onClick={() => setCount(count + 1)}>Count: {count}</button>;
+}
+```
+
+## 4. Component Composition Patterns
+
+### Pattern A: Server Parent with Client Children
+
+Push `"use client"` as far down the tree as possible. Keep data fetching in Server Components.
+
+```typescript
+// ✅ GOOD: Server Component fetches, Client Component handles interaction
+// app/projects/page.tsx (Server Component)
+import { getProjects } from "@/lib/api";
+import { ProjectCard } from "@/features/projects";
+
+export default async function ProjectsPage() {
+    const projects = await getProjects();
+
+    return (
+        <div>
+            {projects.map((project) => (
+                <ProjectCard key={project.id} project={project} />
+            ))}
+        </div>
+    );
+}
+
+// @features/projects/ProjectCard.tsx (Client Component)
+("use client");
+
+export function ProjectCard({ project }: { project: Project }) {
+    const [isExpanded, setIsExpanded] = useState(false);
+    // ... interactive logic
+}
+```
+
+### Pattern B: Passing Server Components as Children
+
+Server Components can be passed as `children` to Client Components.
+
+```typescript
+// ✅ GOOD: Server content passed through Client wrapper
+// layout.tsx (Server Component)
+import { Sidebar } from "@/ui/sidebar";
+import { Navigation } from "@/features/navigation";
+
+export default function Layout({ children }) {
+    return (
+        <Sidebar>
+            {/* Navigation is a Server Component rendered inside Client Sidebar */}
+            <Navigation />
+        </Sidebar>
+    );
+}
+
+// @ui/sidebar.tsx (Client Component)
+("use client");
+
+export function Sidebar({ children }: { children: React.ReactNode }) {
+    const [isOpen, setIsOpen] = useState(true);
+
+    return <aside className={isOpen ? "w-64" : "w-16"}>{children}</aside>;
+}
+```
+
+### Pattern C: Extracting Interactive Parts
+
+When only part of a component needs interactivity, extract just that part.
+
+```typescript
+// ❌ BAD: Entire component is Client because of one button
+"use client";
+
+export function ArticleCard({ article }) {
+    const [liked, setLiked] = useState(false);
+
+    return (
+        <article>
+            <h2>{article.title}</h2>
+            <p>{article.excerpt}</p>
+            <p>{article.author}</p>
+            <p>{article.publishedAt}</p>
+            <button onClick={() => setLiked(!liked)}>
+                {liked ? "Unlike" : "Like"}
+            </button>
+        </article>
+    );
+}
+
+// ✅ GOOD: Only the interactive button is a Client Component
+// ArticleCard.tsx (Server Component)
+import { LikeButton } from "./LikeButton";
+
+export function ArticleCard({ article }) {
+    return (
+        <article>
+            <h2>{article.title}</h2>
+            <p>{article.excerpt}</p>
+            <p>{article.author}</p>
+            <p>{article.publishedAt}</p>
+            <LikeButton articleId={article.id} />
+        </article>
+    );
+}
+
+// LikeButton.tsx (Client Component)
+("use client");
+
+export function LikeButton({ articleId }: { articleId: string }) {
+    const [liked, setLiked] = useState(false);
+    return (
+        <button onClick={() => setLiked(!liked)}>
+            {liked ? "Unlike" : "Like"}
+        </button>
+    );
+}
+```
+
+## 5. Anti-Patterns to Avoid
+
+### ❌ Don't: Add "use client" at the top of feature folders
+
+```typescript
+// ❌ BAD: Makes entire feature tree client-side
+// @features/projects/index.tsx
+"use client"; // This prevents server rendering for everything below
+```
+
+### ❌ Don't: Pass functions from Server to Client Components
+
+```typescript
+// ❌ BAD: Functions cannot be serialized
+// Server Component
+export default function Page() {
+    const handleClick = () => console.log("clicked");
+    return <ClientButton onClick={handleClick} />; // Error!
+}
+```
+
+### ❌ Don't: Import Server Components into Client Components
+
+```typescript
+// ❌ BAD: Server Component imported into Client becomes Client
+"use client";
+
+import { ServerDataFetcher } from "./ServerDataFetcher"; // Now runs on client!
+
+export function Dashboard() {
+    return <ServerDataFetcher />;
+}
+```
+
+### ✅ Do: Use the children pattern instead
+
+```typescript
+// ✅ GOOD: Pass Server Component as children
+// page.tsx (Server)
+import { ClientWrapper } from "./ClientWrapper";
+import { ServerDataFetcher } from "./ServerDataFetcher";
+
+export default function Page() {
+    return (
+        <ClientWrapper>
+            <ServerDataFetcher />
+        </ClientWrapper>
+    );
+}
+```
+
+## 6. Quick Reference Table
+
+| Scenario                        | Component Type | Reason                           |
+| :------------------------------ | :------------- | :------------------------------- |
+| Fetching data                   | Server         | Direct async/await, no API route |
+| Form with validation            | Client         | Needs useState, event handlers   |
+| Static content display          | Server         | No interactivity needed          |
+| Dropdown/Modal                  | Client         | Needs state for open/close       |
+| List with data from DB          | Server         | Data fetching                    |
+| List item with delete button    | Client         | onClick handler                  |
+| Navigation links                | Server         | Static, Link component works     |
+| Navigation with active state    | Client         | Needs usePathname hook           |
+| Third-party chart library       | Client         | Client-only dependency           |
+| Markdown rendering (server lib) | Server         | Can use server-only libraries    |
