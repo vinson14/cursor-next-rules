@@ -1,5 +1,10 @@
 ---
-description: This rule applies when querying or mutating data in Supabase database, writing RLS policies, or generating TypeScript types from the database schema.
+description: Apply when querying/mutating Supabase database, writing RLS policies, or generating TypeScript types. Covers CRUD operations in Server Components/Actions, React Query integration for Client Components, Row Level Security patterns, and type generation from schema.
+globs:
+    - "**/lib/supabase/**/*.ts"
+    - "**/supabase/**/*.ts"
+    - "**/types/database.ts"
+    - "**/*.sql"
 alwaysApply: false
 ---
 

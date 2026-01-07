@@ -1,5 +1,8 @@
 ---
-description: Abide by this rule when implementing Authentication using WorkOS.
+description: Apply when implementing WorkOS AuthKit authentication. Covers middleware auth mode configuration in proxy.ts, unauthenticatedPaths setup, and auth callback route handler configuration.
+globs:
+  - "**/proxy.ts"
+  - "**/auth/callback/route.ts"
 alwaysApply: false
 ---
 

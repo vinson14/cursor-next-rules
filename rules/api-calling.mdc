@@ -1,6 +1,12 @@
 ---
-description: This rule applies when making API calls to the backend, defining data fetching strategies, handling mutations, or configuring authentication in Next.js 16+.
-alwaysApply: true
+description: Apply when implementing API calls, data fetching, server actions, mutations, or configuring the apiClient. Covers fetch wrapper patterns, Zod validation, error handling with ApiError, TanStack Query integration, and cache revalidation strategies.
+globs:
+    - "**/actions/**/*.ts"
+    - "**/actions/**/*.tsx"
+    - "**/api/**/*.ts"
+    - "**/lib/apiClient.ts"
+    - "**/lib/api/**/*.ts"
+alwaysApply: false
 ---
 
 # API Calling Guidelines

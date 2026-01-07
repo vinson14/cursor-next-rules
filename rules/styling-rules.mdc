@@ -1,5 +1,9 @@
 ---
-description: Use this rule when applying styles to components
+description: Apply when styling components with Tailwind CSS v4. Covers CSS-first configuration, @theme directive for custom colors, utility class usage, and avoiding custom CSS classes in favor of Tailwind utilities.
+globs:
+  - "**/*.css"
+  - "**/globals.css"
+  - "**/tailwind.config.*"
 alwaysApply: false
 ---
 

@@ -1,5 +1,11 @@
 ---
-description: This rule applies when implementing authentication with Supabase Auth, including sign up, sign in, sign out, session management, or route protection.
+description: Apply when implementing Supabase authentication including sign up/in/out, session management, OAuth providers, proxy (middleware) protection, and auth callback handling. Covers server/browser client setup, cookie handling, and protected routes.
+globs:
+    - "**/lib/supabase/**/*.ts"
+    - "**/supabase/**/*.ts"
+    - "**/auth/**/*.ts"
+    - "**/auth/**/*.tsx"
+    - "**/proxy.ts"
 alwaysApply: false
 ---
 
@@ -76,15 +82,17 @@ export function createClient() {
 }
 ```
 
-## 4. Middleware
+## 4. Proxy (Middleware)
 
-Refreshes auth tokens and protects routes. Create `middleware.ts` in your project root.
+Refreshes auth tokens and protects routes. Create `proxy.ts` in your project root.
+
+**Note:** In Next.js 16+, `middleware.ts` has been renamed to `proxy.ts`. Use the `proxy` function name.
 
 ```typescript
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
     let supabaseResponse = NextResponse.next({ request });
 
     const supabase = createServerClient(
@@ -294,7 +302,7 @@ app/
 │   └── verify-email/page.tsx
 └── (protected)/          # Route group for protected pages
     └── dashboard/page.tsx
-middleware.ts             # Auth refresh + route protection
+proxy.ts                  # Auth refresh + route protection (Next.js 16+)
 ```
 
 ## 8. Best Practices
@@ -302,7 +310,7 @@ middleware.ts             # Auth refresh + route protection
 | Do                                           | Don't                                  |
 | :------------------------------------------- | :------------------------------------- |
 | Use `getUser()` to verify auth (server-side) | Trust `getSession()` alone for auth    |
-| Use middleware to refresh sessions           | Manually manage auth tokens            |
-| Redirect unauthenticated users in middleware | Check auth in every page component     |
+| Use proxy to refresh sessions                | Manually manage auth tokens            |
+| Redirect unauthenticated users in proxy      | Check auth in every page component     |
 | Use Server Actions for auth mutations        | Call auth methods directly from client |
 | Handle errors and show user feedback         | Silently fail auth operations          |

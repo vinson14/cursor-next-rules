@@ -1,5 +1,10 @@
 ---
-description: This rule applies when creating React components, deciding between Server and Client Components, or structuring component hierarchies in Next.js.
+description: Apply when creating React components, deciding between Server vs Client Components, or structuring component composition. Covers the "use client" directive decision tree, server/client boundaries, children pattern, and anti-patterns to avoid.
+globs:
+    - "**/@features/**/*.tsx"
+    - "**/@ui/**/*.tsx"
+    - "**/components/**/*.tsx"
+    - "**/features/**/*.tsx"
 alwaysApply: false
 ---
 

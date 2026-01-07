@@ -1,6 +1,10 @@
 ---
-description: This rule applies when creating forms, handling form validation, managing form state, or integrating forms with server actions in Next.js 16+.
-alwaysApply: true
+description: Apply when building forms with validation, handling form submissions, or integrating forms with server actions. Covers React Hook Form + Zod setup, useMutation integration, field-level error mapping from API responses, and form state management.
+globs:
+  - "**/*Form.tsx"
+  - "**/*Form/*.tsx"
+  - "**/forms/**/*.tsx"
+alwaysApply: false
 ---
 
 # Forms Guidelines

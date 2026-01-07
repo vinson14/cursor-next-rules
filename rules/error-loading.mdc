@@ -1,5 +1,10 @@
 ---
-description: This rule applies when implementing error handling, loading states, Suspense boundaries, or creating error/loading UI files in Next.js.
+description: Apply when implementing error boundaries, loading states, Suspense, or not-found handling. Covers error.tsx, loading.tsx, not-found.tsx conventions, skeleton components, streaming patterns, and the error handling flow from apiClient through to UI.
+globs:
+  - "**/error.tsx"
+  - "**/loading.tsx"
+  - "**/not-found.tsx"
+  - "**/*Skeleton*.tsx"
 alwaysApply: false
 ---
 

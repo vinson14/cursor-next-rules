@@ -1,5 +1,9 @@
 ---
-description: This rule applies when using shadcn/ui components, adding new components, customizing component styles, or building UI with the shadcn library.
+description: Apply when using, adding, or customizing shadcn/ui components. Covers CLI usage, component customization patterns, form integration with React Hook Form, theming with CSS variables, and accessibility considerations.
+globs:
+  - "**/components/ui/**/*.tsx"
+  - "**/@ui/**/*.tsx"
+  - "**/components.json"
 alwaysApply: false
 ---
 
