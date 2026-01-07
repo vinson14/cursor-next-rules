@@ -38,22 +38,33 @@ components/
 ```json
 {
     "$schema": "https://ui.shadcn.com/schema.json",
-    "style": "default",
+    "style": "new-york",
     "rsc": true,
     "tsx": true,
     "tailwind": {
-        "config": "tailwind.config.ts",
+        "config": "",
         "css": "app/globals.css",
         "baseColor": "neutral",
-        "cssVariables": true
+        "cssVariables": true,
+        "prefix": ""
     },
+    "iconLibrary": "lucide",
     "aliases": {
         "components": "@/components",
         "utils": "@/lib/utils",
-        "ui": "@/components/ui"
-    }
+        "ui": "@/components/ui",
+        "lib": "@/lib",
+        "hooks": "@/hooks"
+    },
+    "registries": {}
 }
 ```
+
+**Configuration Notes:**
+
+-   `tailwind.config: ""` - Empty for Tailwind v4 CSS-first configuration (no config file needed)
+-   `iconLibrary: "lucide"` - Uses Lucide icons for consistent iconography
+-   Aliases match the directory structure defined in [Directory Rules](./directory-rules.mdc)
 
 ## 3. Adding Components
 
@@ -61,13 +72,13 @@ Use the CLI to add components. Never copy-paste from the website manually.
 
 ```bash
 # Add a single component
-npx shadcn@latest add button
+pnpm dlx shadcn@latest add button
 
 # Add multiple components
-npx shadcn@latest add card dialog dropdown-menu
+pnpm dlx shadcn@latest add card dialog dropdown-menu
 
 # Add all components (use sparingly)
-npx shadcn@latest add --all
+pnpm dlx shadcn@latest add --all
 ```
 
 ### When to Add Components
@@ -306,7 +317,7 @@ import {
 
 // For simple tables, use the basic Table components
 // For complex tables with sorting/filtering/pagination, add:
-// npx shadcn@latest add table
+// pnpm dlx shadcn@latest add table
 // Then follow the Data Table documentation pattern
 ```
 
