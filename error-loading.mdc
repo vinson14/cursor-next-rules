@@ -1,0 +1,301 @@
+---
+description: Apply when implementing error boundaries, loading states, Suspense, or not-found handling. Covers error.tsx, loading.tsx, not-found.tsx conventions, skeleton components, streaming patterns, and the error handling flow from apiClient through to UI.
+globs:
+  - "**/error.tsx"
+  - "**/loading.tsx"
+  - "**/not-found.tsx"
+  - "**/*Skeleton*.tsx"
+alwaysApply: false
+---
+
+# Error Handling & Loading States
+
+## 1. Error Boundary Hierarchy
+
+Next.js uses file-based error boundaries. Place `error.tsx` files strategically based on error granularity needs.
+
+```
+app/
+├── error.tsx              # Global fallback (catches all unhandled errors)
+├── layout.tsx
+├── page.tsx
+├── projects/
+│   ├── error.tsx          # Project-specific errors
+│   ├── page.tsx
+│   └── [id]/
+│       ├── error.tsx      # Individual project errors
+│       └── page.tsx
+└── settings/
+    ├── error.tsx          # Settings-specific errors
+    └── page.tsx
+```
+
+### Error Boundary Placement Strategy
+
+| Placement                 | Use Case                                 |
+| :------------------------ | :--------------------------------------- |
+| `app/error.tsx`           | Catch-all for unexpected errors          |
+| `app/(feature)/error.tsx` | Feature-specific error UI and recovery   |
+| Route group level         | Shared error handling for related routes |
+
+## 2. Error Component Implementation
+
+Error components **must** be Client Components.
+
+```typescript
+"use client";
+
+import { useEffect } from "react";
+
+interface ErrorProps {
+    error: Error & { digest?: string };
+    reset: () => void;
+}
+
+export default function Error({ error, reset }: ErrorProps) {
+    useEffect(() => {
+        // Log error to monitoring service (Sentry, etc.)
+        console.error(error);
+    }, [error]);
+
+    return (
+        <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+            <h2 className="text-xl font-semibold">Something went wrong</h2>
+            <p className="text-muted-foreground">
+                {error.message || "An unexpected error occurred"}
+            </p>
+            <button
+                onClick={reset}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-md"
+            >
+                Try again
+            </button>
+        </div>
+    );
+}
+```
+
+### Key Points
+
+-   **`error` prop**: Contains the error object with optional `digest` for server errors
+-   **`reset` function**: Re-renders the route segment, useful for transient errors
+-   **Always log errors**: Send to monitoring service in `useEffect`
+
+## 3. Not Found Handling
+
+Use `not-found.tsx` for 404 errors. Trigger with `notFound()` from `next/navigation`.
+
+```typescript
+// app/projects/[id]/page.tsx
+import { notFound } from "next/navigation";
+import { ApiError } from "@/lib/apiClient";
+
+export default async function ProjectPage({
+    params,
+}: {
+    params: { id: string };
+}) {
+    try {
+        const project = await getProject(params.id);
+        return <ProjectDetails project={project} />;
+    } catch (error) {
+        if (error instanceof ApiError && error.status === 404) {
+            notFound(); // Triggers not-found.tsx
+        }
+        throw error; // Other errors bubble to error.tsx
+    }
+}
+```
+
+```typescript
+// app/projects/[id]/not-found.tsx
+export default function NotFound() {
+    return (
+        <div className="flex flex-col items-center justify-center min-h-[400px]">
+            <h2 className="text-xl font-semibold">Project Not Found</h2>
+            <p className="text-muted-foreground">
+                The project you're looking for doesn't exist or has been
+                deleted.
+            </p>
+        </div>
+    );
+}
+```
+
+## 4. Loading States
+
+### Route-Level Loading (`loading.tsx`)
+
+`loading.tsx` automatically wraps the page in a Suspense boundary.
+
+```typescript
+// app/projects/loading.tsx
+export default function Loading() {
+    return (
+        <div className="space-y-4">
+            <div className="h-8 w-48 bg-muted animate-pulse rounded" />
+            <div className="grid grid-cols-3 gap-4">
+                {[...Array(6)].map((_, i) => (
+                    <div
+                        key={i}
+                        className="h-32 bg-muted animate-pulse rounded-lg"
+                    />
+                ))}
+            </div>
+        </div>
+    );
+}
+```
+
+### Component-Level Loading (Suspense)
+
+For granular loading states, use Suspense boundaries directly.
+
+```typescript
+import { Suspense } from "react";
+import { ProjectList } from "@/features/projects";
+import { RecentActivity } from "@/features/activity";
+
+export default function DashboardPage() {
+    return (
+        <div className="grid grid-cols-2 gap-8">
+            {/* Each section loads independently */}
+            <Suspense fallback={<ProjectListSkeleton />}>
+                <ProjectList />
+            </Suspense>
+
+            <Suspense fallback={<ActivitySkeleton />}>
+                <RecentActivity />
+            </Suspense>
+        </div>
+    );
+}
+```
+
+## 5. Skeleton Component Patterns
+
+### Guidelines
+
+-   **Match dimensions**: Skeletons should match the layout of the loaded content
+-   **Use consistent animation**: `animate-pulse` for simple, CSS-only animation
+-   **Avoid layout shift**: Ensure skeleton and content have identical spacing
+
+```typescript
+// @ui/skeleton.tsx
+interface SkeletonProps {
+    className?: string;
+}
+
+export function Skeleton({ className }: SkeletonProps) {
+    return (
+        <div className={`bg-muted animate-pulse rounded ${className ?? ""}`} />
+    );
+}
+
+// Usage in feature-specific skeletons
+export function ProjectCardSkeleton() {
+    return (
+        <div className="p-4 border rounded-lg space-y-3">
+            <Skeleton className="h-6 w-3/4" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-2/3" />
+            <div className="flex gap-2 pt-2">
+                <Skeleton className="h-8 w-20" />
+                <Skeleton className="h-8 w-20" />
+            </div>
+        </div>
+    );
+}
+```
+
+## 6. Streaming with Suspense
+
+Use streaming to progressively render content as data becomes available.
+
+```typescript
+// app/projects/[id]/page.tsx
+import { Suspense } from "react";
+
+export default async function ProjectPage({
+    params,
+}: {
+    params: { id: string };
+}) {
+    // This data loads first (blocking)
+    const project = await getProject(params.id);
+
+    return (
+        <div>
+            {/* Immediately visible */}
+            <h1>{project.name}</h1>
+            <p>{project.description}</p>
+
+            {/* Streams in when ready */}
+            <Suspense fallback={<CommentsSkeleton />}>
+                <ProjectComments projectId={params.id} />
+            </Suspense>
+
+            <Suspense fallback={<AnalyticsSkeleton />}>
+                <ProjectAnalytics projectId={params.id} />
+            </Suspense>
+        </div>
+    );
+}
+
+// These components fetch their own data
+async function ProjectComments({ projectId }: { projectId: string }) {
+    const comments = await getComments(projectId); // Slow query
+    return <CommentList comments={comments} />;
+}
+```
+
+## 7. Error Handling Flow
+
+This integrates with the error handling defined in [API Calling Guidelines](./api-calling.mdc).
+
+```
+┌─────────────────┐
+│   API Client    │ ──▶ Throws ApiError or ZodError
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Server Action  │ ──▶ Bubbles error up (no try/catch)
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐     404?      ┌─────────────────┐
+│Server Component │ ─────────────▶│   notFound()    │ ──▶ not-found.tsx
+└────────┬────────┘               └─────────────────┘
+         │
+         │ Other errors
+         ▼
+┌─────────────────┐
+│    error.tsx    │ ──▶ Renders error UI with reset()
+└─────────────────┘
+```
+
+## 8. Best Practices Summary
+
+### Error Handling
+
+-   ✅ Let errors bubble up from Server Actions
+-   ✅ Catch 404s explicitly and call `notFound()`
+-   ✅ Use `error.tsx` at appropriate route levels
+-   ✅ Log errors to monitoring in `useEffect`
+-   ✅ Provide meaningful error messages and recovery options
+
+### Loading States
+
+-   ✅ Use `loading.tsx` for route-level loading
+-   ✅ Use Suspense for component-level granularity
+-   ✅ Create skeletons that match content dimensions
+-   ✅ Stream slow data with Suspense boundaries
+-   ✅ Avoid layout shift between skeleton and content
+
+### Anti-Patterns
+
+-   ❌ Don't catch errors in Server Actions to return `{ success: false }`
+-   ❌ Don't use generic spinners when skeletons are more appropriate
+-   ❌ Don't forget to handle the `reset` function in error boundaries
+-   ❌ Don't nest too many Suspense boundaries (causes waterfall)

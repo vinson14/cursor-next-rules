@@ -1,0 +1,353 @@
+---
+description: Apply when querying/mutating Supabase database, writing RLS policies, or generating TypeScript types. Covers CRUD operations in Server Components/Actions, React Query integration for Client Components, Row Level Security patterns, and type generation from schema.
+globs:
+    - "**/lib/supabase/**/*.ts"
+    - "**/supabase/**/*.ts"
+    - "**/types/database.ts"
+    - "**/*.sql"
+alwaysApply: false
+---
+
+# Supabase Database
+
+## 1. Overview
+
+Supabase provides a PostgreSQL database accessed via an auto-generated REST API. Security is enforced through Row Level Security (RLS) policies.
+
+**Prerequisites:** Ensure Supabase client is set up as described in [Supabase Auth](./supabase-auth.mdc).
+
+## 2. Environment Variables
+
+```bash
+# .env.local
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+
+# Only for admin operations (Server-side only, never expose to client)
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+```
+
+**Important:** `SUPABASE_SERVICE_ROLE_KEY` bypasses RLS and must **never** be exposed to the client.
+
+## 3. Database Queries
+
+### Server Component (Direct Query)
+
+```typescript
+import { createClient } from "@/lib/supabase/server";
+
+export default async function ProjectsPage() {
+    const supabase = await createClient();
+
+    const { data: projects, error } = await supabase
+        .from("projects")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+    if (error) {
+        throw error; // Caught by error.tsx
+    }
+
+    return (
+        <ul>
+            {projects.map((project) => (
+                <li key={project.id}>{project.name}</li>
+            ))}
+        </ul>
+    );
+}
+```
+
+### Server Action (Mutation)
+
+```typescript
+"use server";
+
+import { createClient } from "@/lib/supabase/server";
+import { revalidatePath } from "next/cache";
+
+export async function createProject(formData: FormData) {
+    const supabase = await createClient();
+
+    const { error } = await supabase.from("projects").insert({
+        name: formData.get("name") as string,
+        description: formData.get("description") as string,
+    });
+
+    if (error) {
+        throw error;
+    }
+
+    revalidatePath("/projects");
+}
+
+export async function updateProject(id: string, formData: FormData) {
+    const supabase = await createClient();
+
+    const { error } = await supabase
+        .from("projects")
+        .update({
+            name: formData.get("name") as string,
+            description: formData.get("description") as string,
+        })
+        .eq("id", id);
+
+    if (error) {
+        throw error;
+    }
+
+    revalidatePath("/projects");
+}
+
+export async function deleteProject(id: string) {
+    const supabase = await createClient();
+
+    const { error } = await supabase.from("projects").delete().eq("id", id);
+
+    if (error) {
+        throw error;
+    }
+
+    revalidatePath("/projects");
+}
+```
+
+### Client Component (with React Query)
+
+For Client Components, combine Supabase with TanStack Query as per [API Calling Guidelines](./api-calling.mdc).
+
+```typescript
+"use client";
+
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { createClient } from "@/lib/supabase/client";
+
+export function useProjects() {
+    const supabase = createClient();
+
+    return useQuery({
+        queryKey: ["projects"],
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("projects")
+                .select("*")
+                .order("created_at", { ascending: false });
+
+            if (error) throw error;
+            return data;
+        },
+    });
+}
+
+export function useCreateProject() {
+    const supabase = createClient();
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async (project: { name: string; description: string }) => {
+            const { data, error } = await supabase
+                .from("projects")
+                .insert(project)
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["projects"] });
+        },
+    });
+}
+```
+
+## 4. Row Level Security (RLS)
+
+**RLS is mandatory.** Without it, your data is publicly accessible to anyone with your anon key.
+
+### Enable RLS on Tables
+
+```sql
+-- Enable RLS (do this for EVERY table)
+ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
+```
+
+### Common Policies
+
+#### Owner-Based Access
+
+```sql
+-- Users can only see their own projects
+CREATE POLICY "Users can view own projects"
+ON projects FOR SELECT
+USING (auth.uid() = user_id);
+
+-- Users can insert their own projects
+CREATE POLICY "Users can insert own projects"
+ON projects FOR INSERT
+WITH CHECK (auth.uid() = user_id);
+
+-- Users can update their own projects
+CREATE POLICY "Users can update own projects"
+ON projects FOR UPDATE
+USING (auth.uid() = user_id);
+
+-- Users can delete their own projects
+CREATE POLICY "Users can delete own projects"
+ON projects FOR DELETE
+USING (auth.uid() = user_id);
+```
+
+#### Public Read, Authenticated Write
+
+```sql
+-- Anyone can read
+CREATE POLICY "Public read access"
+ON posts FOR SELECT
+USING (true);
+
+-- Only authenticated users can insert
+CREATE POLICY "Authenticated users can insert"
+ON posts FOR INSERT
+WITH CHECK (auth.role() = 'authenticated');
+```
+
+#### Team-Based Access
+
+```sql
+-- Team members can view team projects
+CREATE POLICY "Team members can view projects"
+ON projects FOR SELECT
+USING (
+    auth.uid() IN (
+        SELECT user_id FROM team_members
+        WHERE team_id = projects.team_id
+    )
+);
+```
+
+### RLS Pattern Reference
+
+| Pattern             | SQL                                                                              |
+| :------------------ | :------------------------------------------------------------------------------- |
+| Owner only          | `auth.uid() = user_id`                                                           |
+| Authenticated users | `auth.role() = 'authenticated'`                                                  |
+| Public read         | `true` (for SELECT only)                                                         |
+| Team members        | `auth.uid() IN (SELECT user_id FROM team_members WHERE team_id = table.team_id)` |
+| Admin only          | `auth.uid() IN (SELECT user_id FROM admins)`                                     |
+
+## 5. Type Generation
+
+Generate TypeScript types from your database schema for full type safety.
+
+### Setup
+
+```bash
+# Install Supabase CLI
+pnpm add -D supabase
+
+# Login and link project
+pnpm supabase login
+pnpm supabase link --project-ref your-project-ref
+
+# Generate types
+pnpm supabase gen types typescript --linked > types/database.ts
+```
+
+### Add to Package Scripts
+
+```json
+{
+    "scripts": {
+        "db:types": "supabase gen types typescript --linked > types/database.ts"
+    }
+}
+```
+
+Run `pnpm db:types` after any schema changes.
+
+### Usage with Typed Client
+
+```typescript
+import { createClient } from "@/lib/supabase/server";
+import type { Database } from "@/types/database";
+
+type Project = Database["public"]["Tables"]["projects"]["Row"];
+type NewProject = Database["public"]["Tables"]["projects"]["Insert"];
+
+export default async function ProjectsPage() {
+    const supabase = await createClient();
+
+    // Fully typed query
+    const { data } = await supabase
+        .from("projects")
+        .select("id, name, created_at")
+        .returns<Pick<Project, "id" | "name" | "created_at">[]>();
+
+    // data is properly typed
+}
+```
+
+## 6. Query Patterns
+
+### Select with Relations
+
+```typescript
+// Get projects with their tasks
+const { data } = await supabase.from("projects").select(`
+        id,
+        name,
+        tasks (
+            id,
+            title,
+            completed
+        )
+    `);
+```
+
+### Filtering
+
+```typescript
+// Multiple conditions
+const { data } = await supabase
+    .from("projects")
+    .select("*")
+    .eq("status", "active")
+    .gte("created_at", "2024-01-01")
+    .order("created_at", { ascending: false })
+    .limit(10);
+```
+
+### Pagination
+
+```typescript
+const PAGE_SIZE = 10;
+
+const { data, count } = await supabase
+    .from("projects")
+    .select("*", { count: "exact" })
+    .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+```
+
+## 7. Best Practices
+
+| Do                                        | Don't                                          |
+| :---------------------------------------- | :--------------------------------------------- |
+| Enable RLS on all tables                  | Leave tables without RLS policies              |
+| Use `auth.uid()` in RLS policies          | Trust client-provided user IDs                 |
+| Generate and commit type definitions      | Manually type database schemas                 |
+| Use Server Actions for mutations          | Mutate directly from Client Components         |
+| Handle errors explicitly                  | Ignore Supabase error responses                |
+| Use `.select()` to specify needed columns | Always `select("*")` when you need few columns |
+| Use `revalidatePath` after mutations      | Forget to invalidate cache                     |
+
+## 8. File Structure
+
+```
+lib/
+└── supabase/
+    ├── server.ts      # Server client factory
+    └── client.ts      # Browser client factory
+types/
+└── database.ts        # Generated types (run db:types)
+```
